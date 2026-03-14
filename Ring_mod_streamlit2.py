@@ -29,9 +29,9 @@ st.markdown(
     r"""
 Cette application illustre la **modulation en anneaux** :
 
-\[
-y(t) = x(t)\,m(t)
-\]
+
+y(t) = x(t) * m(t)
+
 
 où :
 - \(x(t)\) est le **signal porteur**
@@ -64,16 +64,16 @@ with st.sidebar:
 
     carrier_freq = st.slider(
         "Fréquence du porteur (Hz)",
-        min_value=20,
-        max_value=4000,
+        min_value=1,
+        max_value=800,
         value=440,
-        step=1,
+        step=0.5,
     )
 
     mod_freq = st.slider(
         "Fréquence du modulant (Hz)",
-        min_value=1,
-        max_value=4000,
+        min_value=0,
+        max_value=1500,
         value=120,
         step=1,
     )
