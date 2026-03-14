@@ -26,11 +26,11 @@ st.set_page_config(
 st.title("Illustration d'un ring modulator")
 
 st.markdown(
-    r"""
+r"""
 Cette application illustre la **modulation en anneaux** :
 
 
-y(t) = x(t) * m(t)
+y(t) = x(t) \* m(t)
 
 
 où :
