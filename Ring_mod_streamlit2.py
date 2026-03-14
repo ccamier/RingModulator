@@ -67,7 +67,7 @@ with st.sidebar:
         min_value=1,
         max_value=800,
         value=440,
-        step=0.5,
+        step=1,
     )
 
     mod_freq = st.slider(
