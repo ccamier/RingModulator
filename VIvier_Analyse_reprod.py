@@ -43,19 +43,7 @@ i \cdot f_p + f_m
 
 avec la note correspondante au quart de ton près.
 
-L'application génère aussi trois signaux audio avec une **enveloppe ADSR commune** :
 
-\[
-x_p(t)=A(t)\sin(2\pi f_p t)
-\]
-
-\[
-x_m(t)=A(t)\sin(2\pi f_m t)
-\]
-
-\[
-x_{\Sigma}(t)=A(t)\sum_{i=1}^{12}\sin\!\bigl(2\pi(i f_p+f_m)t\bigr)
-\]
 """
 )
 
@@ -313,24 +301,6 @@ else:
     fm_note = fm_note_input
     fm = float(note_freq_from_label(fm_note))
 
-# ============================================================
-# Paramètres ADSR communs
-# ============================================================
-st.subheader("Paramètres ADSR communs")
-
-ad1, ad2, ad3 = st.columns(3)
-
-with ad1:
-    fs_audio = st.number_input("Fréquence d'échantillonnage (Hz)", min_value=8000, max_value=96000, value=44100, step=1000)
-    attack_ms = st.number_input("Attack (ms)", min_value=1.0, max_value=5000.0, value=10.0, step=1.0)
-    decay_ms = st.number_input("Decay (ms)", min_value=1.0, max_value=5000.0, value=100.0, step=1.0)
-
-with ad2:
-    sustain_ms = st.number_input("Sustain durée (ms)", min_value=1.0, max_value=5000.0, value=100.0, step=1.0)
-    release_ms = st.number_input("Release (ms)", min_value=1.0, max_value=10000.0, value=500.0, step=1.0)
-
-with ad3:
-    sustain_level = st.slider("Niveau de sustain", min_value=0.0, max_value=1.0, value=0.7, step=0.01)
 
 # ============================================================
 # Résumé
@@ -402,6 +372,28 @@ st.write(f"Sinusoïdes actives dans la somme : **{n_active} / 12**")
 freqs_active = [
     f for f, c in zip(freqs_12, coeffs_12) if c == 1
 ]
+
+
+# ============================================================
+# Paramètres ADSR communs
+# ============================================================
+st.subheader("Paramètres ADSR communs")
+
+ad1, ad2, ad3 = st.columns(3)
+
+with ad1:
+    fs_audio = st.number_input("Fréquence d'échantillonnage (Hz)", min_value=8000, max_value=96000, value=44100, step=1000)
+    attack_ms = st.number_input("Attack (ms)", min_value=1.0, max_value=5000.0, value=10.0, step=1.0)
+    decay_ms = st.number_input("Decay (ms)", min_value=1.0, max_value=5000.0, value=100.0, step=1.0)
+
+with ad2:
+    sustain_ms = st.number_input("Sustain durée (ms)", min_value=1.0, max_value=5000.0, value=100.0, step=1.0)
+    release_ms = st.number_input("Release (ms)", min_value=1.0, max_value=10000.0, value=500.0, step=1.0)
+
+with ad3:
+    sustain_level = st.slider("Niveau de sustain", min_value=0.0, max_value=1.0, value=0.7, step=0.01)
+
+
 # ============================================================
 # Génération ADSR commune
 # ============================================================
