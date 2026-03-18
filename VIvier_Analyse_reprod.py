@@ -166,13 +166,23 @@ def generate_adsr_sine(freq: float, t: np.ndarray, env: np.ndarray) -> np.ndarra
     return env * np.sin(2.0 * np.pi * freq * t)
 
 
-def generate_adsr_sum(freqs: list[float], t: np.ndarray, env: np.ndarray) -> np.ndarray:
-    if not freqs:
+def generate_adsr_sum(freqs: list[float], coeffs: list[float], t: np.ndarray, env: np.ndarray) -> np.ndarray:
+    if len(freqs) == 0 or len(coeffs) == 0:
         return np.zeros_like(t)
+
     sig = np.zeros_like(t)
-    for f in freqs:
-        sig += np.sin(2.0 * np.pi * f * t)
-    sig /= len(freqs)
+    coeff_sum = 0.0
+
+    for f, a in zip(freqs, coeffs):
+        if a != 0:
+            sig += a * np.sin(2.0 * np.pi * f * t)
+            coeff_sum += abs(a)
+
+    if coeff_sum > 0:
+        sig /= coeff_sum
+    else:
+        sig[:] = 0.0
+
     return env * sig
 
 
@@ -340,11 +350,9 @@ with c2:
 # Tableau de sortie
 # ============================================================
 rows = []
-freqs_12 = []
 
 for i in range(1, 13):
     value = i * fp + fm
-    freqs_12.append(value)
 
     note_label = freq_to_note_label_quarter(value)
     midi_real = freq_to_midi(value)
@@ -353,6 +361,7 @@ for i in range(1, 13):
     cents_error = 100.0 * (midi_real - midi_q)
 
     rows.append({
+        "Actif": True,
         "i": i,
         "i·fp + fm (Hz)": round(value, 3),
         "Note la plus proche (quart de ton)": note_label,
@@ -363,8 +372,36 @@ for i in range(1, 13):
 df = pd.DataFrame(rows)
 
 st.subheader("Tableau de sortie")
-st.dataframe(df, use_container_width=True)
 
+edited_df = st.data_editor(
+    df,
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "Actif": st.column_config.CheckboxColumn(
+            "Actif",
+            help="Coché : coefficient 1 ; décoché : coefficient 0",
+            default=True,
+        )
+    },
+    disabled=[
+        "i",
+        "i·fp + fm (Hz)",
+        "Note la plus proche (quart de ton)",
+        "Fréquence de la note (Hz)",
+        "Écart (cents)",
+    ],
+)
+
+freqs_12 = edited_df["i·fp + fm (Hz)"].tolist()
+coeffs_12 = edited_df["Actif"].astype(int).tolist()
+
+n_active = sum(coeffs_12)
+st.write(f"Sinusoïdes actives dans la somme : **{n_active} / 12**")
+
+freqs_active = [
+    f for f, c in zip(freqs_12, coeffs_12) if c == 1
+]
 # ============================================================
 # Génération ADSR commune
 # ============================================================
@@ -379,7 +416,7 @@ t_adsr, env_adsr = build_adsr_envelope(
 
 sig_fp = generate_adsr_sine(fp, t_adsr, env_adsr)
 sig_fm = generate_adsr_sine(fm, t_adsr, env_adsr)
-sig_sum = generate_adsr_sum(freqs_12, t_adsr, env_adsr)
+sig_sum = generate_adsr_sum(freqs_12, coeffs_12, t_adsr, env_adsr)
 
 wav_fp = audio_to_wav_bytes(sig_fp, int(fs_audio))
 wav_fm = audio_to_wav_bytes(sig_fm, int(fs_audio))
