@@ -5,7 +5,6 @@ Created on Wed Mar 18 17:04:44 2026
 
 @author: cedriccamier
 """
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
@@ -34,11 +33,6 @@ Cette application permet de saisir :
 
 - une **fréquence porteuse** \(f_p\) ou une **note porteuse** \(n_p\)
 - une **fréquence modulante** \(f_m\) ou une **note modulante** \(n_m\)
-
-Les deux représentations sont **liées entre elles** :
-
-- une fréquence est convertie en **note la plus proche au quart de ton**
-- une note correspond à sa fréquence associée
 
 La sortie affiche les **12 premières valeurs** de :
 
@@ -69,7 +63,6 @@ x_{\Sigma}(t)=A(t)\sum_{i=1}^{12}\sin\!\bigl(2\pi(i f_p+f_m)t\bigr)
 # Outils note <-> fréquence
 # ============================================================
 NOTE_NAMES_FR = ["Do", "Do♯", "Ré", "Ré♯", "Mi", "Fa", "Fa♯", "Sol", "Sol♯", "La", "La♯", "Si"]
-
 MIN_MIDI = 24.0   # C1
 MAX_MIDI = 108.0  # C8
 
@@ -103,7 +96,6 @@ def midi_quarter_to_label(midi_q: float) -> str:
         return base_note
     if abs(frac - 0.5) < 1e-9:
         return f"{base_note} + 1/4 ton"
-
     return base_note
 
 
@@ -119,9 +111,6 @@ def midi_q_to_label(midi_q: float) -> str:
     return midi_quarter_to_label(midi_q)
 
 
-# ============================================================
-# Génération des options de notes
-# ============================================================
 NOTE_OPTIONS = []
 m = MIN_MIDI
 while m <= MAX_MIDI + 1e-9:
@@ -129,13 +118,15 @@ while m <= MAX_MIDI + 1e-9:
     m += 0.5
 
 NOTE_LABELS = [label for _, label in NOTE_OPTIONS]
+NOTE_LABEL_TO_MIDI = {label: midi for midi, label in NOTE_OPTIONS}
 
 
 def note_label_to_midi_q(label: str) -> float:
-    for value, lab in NOTE_OPTIONS:
-        if lab == label:
-            return value
-    raise ValueError(f"Note inconnue : {label}")
+    return NOTE_LABEL_TO_MIDI[label]
+
+
+def note_freq_from_label(label: str) -> float:
+    return midi_to_freq(note_label_to_midi_q(label))
 
 
 def nearest_note_label_from_freq(freq: float) -> str:
@@ -145,61 +136,8 @@ def nearest_note_label_from_freq(freq: float) -> str:
     return midi_q_to_label(midi_q)
 
 
-def note_freq_from_label(label: str) -> float:
-    midi_q = note_label_to_midi_q(label)
-    return midi_to_freq(midi_q)
-
-
 # ============================================================
-# Synchronisation widgets
-# ============================================================
-def set_last_changed(name: str):
-    st.session_state[name] = True
-
-
-def init_state():
-    defaults = {
-        "fp_freq": 440.0,
-        "fm_freq": 120.0,
-        "fp_freq_changed": False,
-        "fp_note_changed": False,
-        "fm_freq_changed": False,
-        "fm_note_changed": False,
-    }
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
-
-    if "fp_note" not in st.session_state:
-        st.session_state.fp_note = nearest_note_label_from_freq(st.session_state.fp_freq)
-    if "fm_note" not in st.session_state:
-        st.session_state.fm_note = nearest_note_label_from_freq(st.session_state.fm_freq)
-
-
-def sync_pair(freq_key: str, note_key: str, freq_changed_key: str, note_changed_key: str):
-    freq_changed = st.session_state.get(freq_changed_key, False)
-    note_changed = st.session_state.get(note_changed_key, False)
-
-    if freq_changed and not note_changed:
-        freq = max(float(st.session_state[freq_key]), 0.001)
-        st.session_state[freq_key] = freq
-        st.session_state[note_key] = nearest_note_label_from_freq(freq)
-
-    elif note_changed and not freq_changed:
-        label = st.session_state[note_key]
-        st.session_state[freq_key] = float(note_freq_from_label(label))
-
-    else:
-        freq = max(float(st.session_state[freq_key]), 0.001)
-        st.session_state[freq_key] = freq
-        st.session_state[note_key] = nearest_note_label_from_freq(freq)
-
-    st.session_state[freq_changed_key] = False
-    st.session_state[note_changed_key] = False
-
-
-# ============================================================
-# ADSR / audio
+# Audio / ADSR
 # ============================================================
 def build_adsr_envelope(
     fs: int,
@@ -229,13 +167,11 @@ def generate_adsr_sine(freq: float, t: np.ndarray, env: np.ndarray) -> np.ndarra
 
 
 def generate_adsr_sum(freqs: list[float], t: np.ndarray, env: np.ndarray) -> np.ndarray:
-    if len(freqs) == 0:
+    if not freqs:
         return np.zeros_like(t)
-
     sig = np.zeros_like(t)
     for f in freqs:
         sig += np.sin(2.0 * np.pi * f * t)
-
     sig /= len(freqs)
     return env * sig
 
@@ -255,7 +191,7 @@ def audio_to_wav_bytes(x: np.ndarray, fs: int) -> bytes:
 
 
 def plot_envelope(t: np.ndarray, env: np.ndarray):
-    fig, ax = plt.subplots(figsize=(10, 3.4))
+    fig, ax = plt.subplots(figsize=(10, 3.2))
     ax.plot(t * 1000.0, env, linewidth=1.5)
     ax.set_title("Enveloppe ADSR")
     ax.set_xlabel("Temps (ms)")
@@ -266,15 +202,10 @@ def plot_envelope(t: np.ndarray, env: np.ndarray):
 
 
 def plot_signal(t: np.ndarray, x: np.ndarray, title: str, zoom_ms: float = 40.0):
-    if len(t) < 2:
-        fig, ax = plt.subplots(figsize=(10, 3.4))
-        ax.set_title(title)
-        return fig
-
-    fs_est = 1.0 / (t[1] - t[0])
+    fs_est = 1.0 / (t[1] - t[0]) if len(t) > 1 else 44100.0
     n = max(10, min(len(t), int((zoom_ms / 1000.0) * fs_est)))
 
-    fig, ax = plt.subplots(figsize=(10, 3.4))
+    fig, ax = plt.subplots(figsize=(10, 3.2))
     ax.plot(t[:n] * 1000.0, x[:n], linewidth=1.2)
     ax.set_title(title)
     ax.set_xlabel("Temps (ms)")
@@ -285,69 +216,96 @@ def plot_signal(t: np.ndarray, x: np.ndarray, title: str, zoom_ms: float = 40.0)
 
 
 # ============================================================
-# Initialisation
+# Initialisation simple
 # ============================================================
-init_state()
-sync_pair("fp_freq", "fp_note", "fp_freq_changed", "fp_note_changed")
-sync_pair("fm_freq", "fm_note", "fm_freq_changed", "fm_note_changed")
+if "fp_mode" not in st.session_state:
+    st.session_state.fp_mode = "Fréquence"
+if "fm_mode" not in st.session_state:
+    st.session_state.fm_mode = "Fréquence"
+
+if "fp_freq_input" not in st.session_state:
+    st.session_state.fp_freq_input = 440.0
+if "fm_freq_input" not in st.session_state:
+    st.session_state.fm_freq_input = 120.0
+
+if "fp_note_input" not in st.session_state:
+    st.session_state.fp_note_input = nearest_note_label_from_freq(440.0)
+if "fm_note_input" not in st.session_state:
+    st.session_state.fm_note_input = nearest_note_label_from_freq(120.0)
 
 # ============================================================
-# Interface
+# Interface d'entrée
 # ============================================================
 st.subheader("Entrées")
 
-col_left, col_right = st.columns(2)
+left, right = st.columns(2)
 
-with col_left:
+with left:
     st.markdown("### Porteuse")
-    st.number_input(
+    fp_mode = st.radio(
+        "Mode d'entrée porteuse",
+        ["Fréquence", "Note"],
+        key="fp_mode",
+        horizontal=True,
+    )
+
+    fp_freq_input = st.number_input(
         "Fréquence porteuse fp (Hz)",
         min_value=0.001,
         max_value=20000.0,
-        value=float(st.session_state.fp_freq),
         step=0.1,
-        key="fp_freq",
-        on_change=set_last_changed,
-        args=("fp_freq_changed",),
+        key="fp_freq_input",
     )
 
-    st.selectbox(
+    fp_note_input = st.selectbox(
         "Note porteuse np",
         options=NOTE_LABELS,
-        index=NOTE_LABELS.index(st.session_state.fp_note),
-        key="fp_note",
-        on_change=set_last_changed,
-        args=("fp_note_changed",),
+        key="fp_note_input",
     )
 
-with col_right:
+with right:
     st.markdown("### Modulante")
-    st.number_input(
+    fm_mode = st.radio(
+        "Mode d'entrée modulante",
+        ["Fréquence", "Note"],
+        key="fm_mode",
+        horizontal=True,
+    )
+
+    fm_freq_input = st.number_input(
         "Fréquence modulante fm (Hz)",
         min_value=0.001,
         max_value=20000.0,
-        value=float(st.session_state.fm_freq),
         step=0.1,
-        key="fm_freq",
-        on_change=set_last_changed,
-        args=("fm_freq_changed",),
+        key="fm_freq_input",
     )
 
-    st.selectbox(
+    fm_note_input = st.selectbox(
         "Note modulante nm",
         options=NOTE_LABELS,
-        index=NOTE_LABELS.index(st.session_state.fm_note),
-        key="fm_note",
-        on_change=set_last_changed,
-        args=("fm_note_changed",),
+        key="fm_note_input",
     )
 
-sync_pair("fp_freq", "fp_note", "fp_freq_changed", "fp_note_changed")
-sync_pair("fm_freq", "fm_note", "fm_freq_changed", "fm_note_changed")
+# ============================================================
+# Résolution des valeurs sans réécriture interdite
+# ============================================================
+if fp_mode == "Fréquence":
+    fp = float(fp_freq_input)
+    fp_note = nearest_note_label_from_freq(fp)
+else:
+    fp_note = fp_note_input
+    fp = float(note_freq_from_label(fp_note))
 
-fp = float(st.session_state.fp_freq)
-fm = float(st.session_state.fm_freq)
+if fm_mode == "Fréquence":
+    fm = float(fm_freq_input)
+    fm_note = nearest_note_label_from_freq(fm)
+else:
+    fm_note = fm_note_input
+    fm = float(note_freq_from_label(fm_note))
 
+# ============================================================
+# Paramètres ADSR communs
+# ============================================================
 st.subheader("Paramètres ADSR communs")
 
 ad1, ad2, ad3 = st.columns(3)
@@ -372,14 +330,14 @@ st.subheader("Valeurs retenues")
 c1, c2 = st.columns(2)
 with c1:
     st.metric("fp", f"{fp:.3f} Hz")
-    st.write(f"Note associée : **{st.session_state.fp_note}**")
+    st.write(f"Note associée : **{fp_note}**")
 
 with c2:
     st.metric("fm", f"{fm:.3f} Hz")
-    st.write(f"Note associée : **{st.session_state.fm_note}**")
+    st.write(f"Note associée : **{fm_note}**")
 
 # ============================================================
-# Calcul du tableau
+# Tableau de sortie
 # ============================================================
 rows = []
 freqs_12 = []
@@ -407,12 +365,8 @@ df = pd.DataFrame(rows)
 st.subheader("Tableau de sortie")
 st.dataframe(df, use_container_width=True)
 
-st.caption(
-    "La note affichée est la note la plus proche quantifiée au quart de ton, soit par pas de 50 cents."
-)
-
 # ============================================================
-# Construction ADSR commune
+# Génération ADSR commune
 # ============================================================
 t_adsr, env_adsr = build_adsr_envelope(
     fs=int(fs_audio),
@@ -432,20 +386,18 @@ wav_fm = audio_to_wav_bytes(sig_fm, int(fs_audio))
 wav_sum = audio_to_wav_bytes(sig_sum, int(fs_audio))
 
 # ============================================================
-# Graphiques généraux
+# Visualisation
 # ============================================================
 st.subheader("Visualisation")
 
 g1, g2 = st.columns(2)
-
 with g1:
     st.pyplot(plot_envelope(t_adsr, env_adsr))
-
 with g2:
     st.pyplot(plot_signal(t_adsr, sig_sum, "Somme des 12 sinusoïdes avec ADSR", zoom_ms=40.0))
 
 # ============================================================
-# Sorties audio
+# Sorties WAV
 # ============================================================
 st.subheader("Sorties WAV")
 
@@ -456,54 +408,16 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 with tab1:
-    st.markdown(rf"Signal : \(A(t)\sin(2\pi f_p t)\) avec \(f_p = {fp:.3f}\,\mathrm{{Hz}}\)")
     st.pyplot(plot_signal(t_adsr, sig_fp, f"Signal ADSR sur fp = {fp:.3f} Hz", zoom_ms=40.0))
     st.audio(wav_fp, format="audio/wav")
-    st.download_button(
-        label="Télécharger WAV fp",
-        data=wav_fp,
-        file_name="signal_adsr_fp.wav",
-        mime="audio/wav",
-    )
+    st.download_button("Télécharger WAV fp", data=wav_fp, file_name="signal_adsr_fp.wav", mime="audio/wav")
 
 with tab2:
-    st.markdown(rf"Signal : \(A(t)\sin(2\pi f_m t)\) avec \(f_m = {fm:.3f}\,\mathrm{{Hz}}\)")
     st.pyplot(plot_signal(t_adsr, sig_fm, f"Signal ADSR sur fm = {fm:.3f} Hz", zoom_ms=40.0))
     st.audio(wav_fm, format="audio/wav")
-    st.download_button(
-        label="Télécharger WAV fm",
-        data=wav_fm,
-        file_name="signal_adsr_fm.wav",
-        mime="audio/wav",
-    )
+    st.download_button("Télécharger WAV fm", data=wav_fm, file_name="signal_adsr_fm.wav", mime="audio/wav")
 
 with tab3:
-    st.markdown(
-        r"""
-Signal :
-\[
-A(t)\sum_{i=1}^{12}\sin\!\bigl(2\pi(i f_p + f_m)t\bigr)
-\]
-"""
-    )
     st.pyplot(plot_signal(t_adsr, sig_sum, "Somme des 12 fréquences avec ADSR", zoom_ms=40.0))
     st.audio(wav_sum, format="audio/wav")
-    st.download_button(
-        label="Télécharger WAV somme",
-        data=wav_sum,
-        file_name="signal_adsr_sum_12freqs.wav",
-        mime="audio/wav",
-    )
-
-st.markdown(
-    f"""
-**Paramètres ADSR courants**
-
-- Attack = **{attack_ms:.1f} ms**
-- Decay = **{decay_ms:.1f} ms**
-- Sustain durée = **{sustain_ms:.1f} ms**
-- Release = **{release_ms:.1f} ms**
-- Sustain level = **{sustain_level:.2f}**
-- Fréquence d'échantillonnage = **{int(fs_audio)} Hz**
-"""
-)
+    st.download_button("Télécharger WAV somme", data=wav_sum, file_name="signal_adsr_sum_12freqs.wav", mime="audio/wav")
